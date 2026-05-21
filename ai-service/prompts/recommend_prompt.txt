@@ -1,0 +1,38 @@
+You are an audit assistant.
+
+Based on the audit issue below, generate exactly 3 practical recommendations.
+
+Rules:
+- Return exactly 3 recommendations.
+- Each recommendation must include:
+  - actiontype
+  - description
+  - priority
+- actiontype should be short, such as "Control Improvement", "Compliance", or "Monitoring".
+- priority must be one of: High, Medium, Low.
+- Keep descriptions clear, practical, and professional.
+- Focus only on the issue provided.
+- Output valid JSON only.
+- Do not include markdown or explanation.
+
+Input:
+{input_text}
+
+Output format:
+[
+  {
+    "actiontype": "Control Improvement",
+    "description": "Ensure all vendor payments are supported by approved invoices before processing.",
+    "priority": "High"
+  },
+  {
+    "actiontype": "Compliance",
+    "description": "Introduce a mandatory approval workflow for payment authorization.",
+    "priority": "High"
+  },
+  {
+    "actiontype": "Monitoring",
+    "description": "Perform periodic reviews of payment records to identify missing documentation.",
+    "priority": "Medium"
+  }
+]

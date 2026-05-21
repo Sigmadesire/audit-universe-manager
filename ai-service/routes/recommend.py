@@ -1,0 +1,87 @@
+from flask import Blueprint, request, jsonify
+from pathlib import Path
+from datetime import datetime, timezone
+from services.groq_client import generate_text
+import json
+
+recommend_bp = Blueprint("recommend", __name__)
+
+PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "recommend_prompt.txt"
+
+
+@recommend_bp.route("/recommend", methods=["POST"])
+def recommend():
+    data = request.get_json(silent=True)
+
+    if data is None:
+        return jsonify({"error": "Request body must be valid JSON"}), 400
+
+    input_text = data.get("input_text")
+
+    if input_text is None:
+        return jsonify({"error": "input_text is required"}), 400
+
+    if not isinstance(input_text, str):
+        return jsonify({"error": "input_text must be a string"}), 400
+
+    input_text = input_text.strip()
+
+    if not input_text:
+        return jsonify({"error": "input_text cannot be empty"}), 400
+
+    if len(input_text) > 5000:
+        return jsonify({"error": "input_text is too long"}), 400
+
+    try:
+        prompt_template = PROMPT_FILE.read_text(encoding="utf-8")
+    except FileNotFoundError:
+        return jsonify({"error": "recommend prompt file not found"}), 500
+
+    final_prompt = prompt_template.replace("{input_text}", input_text)
+
+    try:
+        generated_text = generate_text(final_prompt)
+        recommendations = json.loads(generated_text)
+
+        if not isinstance(recommendations, list) or len(recommendations) != 3:
+            raise ValueError("AI output must be a list of 3 recommendations")
+
+        valid_priorities = {"High", "Medium", "Low"}
+
+        for item in recommendations:
+            if not all(key in item for key in ("actiontype", "description", "priority")):
+                raise ValueError("Each recommendation must contain actiontype, description, and priority")
+
+            if item["priority"] not in valid_priorities:
+                raise ValueError("priority must be High, Medium, or Low")
+
+        return jsonify({
+            "recommendations": recommendations,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "is_fallback": False
+        }), 200
+
+    except Exception:
+        fallback_recommendations = [
+            {
+                "actiontype": "Control Improvement",
+                "description": "Strengthen document verification before processing transactions.",
+                "priority": "High"
+            },
+            {
+                "actiontype": "Compliance",
+                "description": "Introduce mandatory approval checks for high-risk audit areas.",
+                "priority": "High"
+            },
+            {
+                "actiontype": "Monitoring",
+                "description": "Schedule periodic reviews to detect control gaps early.",
+                "priority": "Medium"
+            }
+        ]
+
+        return jsonify({
+            "recommendations": fallback_recommendations,
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "is_fallback": True
+        }), 200
