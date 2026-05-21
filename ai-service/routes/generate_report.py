@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from pathlib import Path
 from datetime import datetime, timezone
+from time import perf_counter
 from services.groq_client import generate_text
 import json
 
@@ -11,6 +12,7 @@ PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "generate_rep
 
 @generate_report_bp.route("/generate-report", methods=["POST"])
 def generate_report():
+    start_time = perf_counter()
     data = request.get_json(silent=True)
 
     if data is None:
@@ -40,22 +42,34 @@ def generate_report():
     final_prompt = prompt_template.replace("{input_text}", input_text)
 
     try:
-        generated_text = generate_text(final_prompt)
-        report = json.loads(generated_text)
+        generated_text_response = generate_text(final_prompt)
+        report = json.loads(generated_text_response)
 
         required_keys = {"title", "summary", "overview", "key_items", "recommendations"}
         if not isinstance(report, dict) or not required_keys.issubset(report.keys()):
             raise ValueError("AI output must contain title, summary, overview, key_items, and recommendations")
 
-        if not isinstance(report["key_items"], list):
-            raise ValueError("key_items must be a list")
+        if not isinstance(report["title"], str) or not report["title"].strip():
+            raise ValueError("title must be a non-empty string")
 
-        if not isinstance(report["recommendations"], list):
-            raise ValueError("recommendations must be a list")
+        if not isinstance(report["summary"], str) or not report["summary"].strip():
+            raise ValueError("summary must be a non-empty string")
+
+        if not isinstance(report["overview"], str) or not report["overview"].strip():
+            raise ValueError("overview must be a non-empty string")
+
+        if not isinstance(report["key_items"], list) or len(report["key_items"]) == 0:
+            raise ValueError("key_items must be a non-empty list")
+
+        if not isinstance(report["recommendations"], list) or len(report["recommendations"]) == 0:
+            raise ValueError("recommendations must be a non-empty list")
+
+        response_time_ms = round((perf_counter() - start_time) * 1000, 2)
 
         return jsonify({
             "report": report,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "response_time_ms": response_time_ms,
             "is_fallback": False
         }), 200
 
@@ -76,8 +90,11 @@ def generate_report():
             ]
         }
 
+        response_time_ms = round((perf_counter() - start_time) * 1000, 2)
+
         return jsonify({
             "report": fallback_report,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "response_time_ms": response_time_ms,
             "is_fallback": True
         }), 200

@@ -1,6 +1,7 @@
 from flask import Blueprint, request, jsonify
 from pathlib import Path
 from datetime import datetime, timezone
+from time import perf_counter
 from services.groq_client import generate_text
 import json
 
@@ -11,6 +12,7 @@ PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "recommend_pr
 
 @recommend_bp.route("/recommend", methods=["POST"])
 def recommend():
+    start_time = perf_counter()
     data = request.get_json(silent=True)
 
     if data is None:
@@ -40,8 +42,8 @@ def recommend():
     final_prompt = prompt_template.replace("{input_text}", input_text)
 
     try:
-        generated_text = generate_text(final_prompt)
-        recommendations = json.loads(generated_text)
+        generated_text_response = generate_text(final_prompt)
+        recommendations = json.loads(generated_text_response)
 
         if not isinstance(recommendations, list) or len(recommendations) != 3:
             raise ValueError("AI output must be a list of 3 recommendations")
@@ -49,15 +51,21 @@ def recommend():
         valid_priorities = {"High", "Medium", "Low"}
 
         for item in recommendations:
+            if not isinstance(item, dict):
+                raise ValueError("Each recommendation must be an object")
+
             if not all(key in item for key in ("actiontype", "description", "priority")):
                 raise ValueError("Each recommendation must contain actiontype, description, and priority")
 
             if item["priority"] not in valid_priorities:
                 raise ValueError("priority must be High, Medium, or Low")
 
+        response_time_ms = round((perf_counter() - start_time) * 1000, 2)
+
         return jsonify({
             "recommendations": recommendations,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "response_time_ms": response_time_ms,
             "is_fallback": False
         }), 200
 
@@ -80,8 +88,11 @@ def recommend():
             }
         ]
 
+        response_time_ms = round((perf_counter() - start_time) * 1000, 2)
+
         return jsonify({
             "recommendations": fallback_recommendations,
             "generated_at": datetime.now(timezone.utc).isoformat(),
+            "response_time_ms": response_time_ms,
             "is_fallback": True
         }), 200
