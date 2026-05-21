@@ -15,6 +15,22 @@ MODEL_NAME = "llama-3.3-70b-versatile"
 AVG_RESPONSE_TIME_MS = 1200
 
 
+@app.after_request
+def add_security_headers(response):
+    response.headers["X-Content-Type-Options"] = "nosniff"
+    response.headers["X-Frame-Options"] = "DENY"
+    response.headers["Referrer-Policy"] = "no-referrer"
+    response.headers["Permissions-Policy"] = "geolocation=(), microphone=(), camera=()"
+    response.headers["Cache-Control"] = "no-store"
+    response.headers["Content-Security-Policy"] = (
+        "default-src 'none'; "
+        "frame-ancestors 'none'; "
+        "base-uri 'none'; "
+        "form-action 'none';"
+    )
+    return response
+
+
 @app.route("/health", methods=["GET"])
 def health():
     uptime_seconds = int((datetime.now(timezone.utc) - START_TIME).total_seconds())
