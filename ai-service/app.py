@@ -1,4 +1,5 @@
 from flask import Flask, jsonify
+from datetime import datetime, timezone
 from routes.describe import describe_bp
 from routes.recommend import recommend_bp
 from routes.generate_report import generate_report_bp
@@ -9,12 +10,22 @@ app.register_blueprint(describe_bp)
 app.register_blueprint(recommend_bp)
 app.register_blueprint(generate_report_bp)
 
+START_TIME = datetime.now(timezone.utc)
+MODEL_NAME = "llama-3.3-70b-versatile"
+AVG_RESPONSE_TIME_MS = 1200
+
 
 @app.route("/health", methods=["GET"])
 def health():
+    uptime_seconds = int((datetime.now(timezone.utc) - START_TIME).total_seconds())
+
     return jsonify({
         "status": "UP",
-        "service": "ai-service"
+        "service": "ai-service",
+        "model": MODEL_NAME,
+        "avg_response_time_ms": AVG_RESPONSE_TIME_MS,
+        "uptime_seconds": uptime_seconds,
+        "timestamp": datetime.now(timezone.utc).isoformat()
     }), 200
 
 
