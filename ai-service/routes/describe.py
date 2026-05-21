@@ -4,9 +4,27 @@ from datetime import datetime, timezone
 from time import perf_counter
 from services.groq_client import generate_text
 
+
 describe_bp = Blueprint("describe", __name__)
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "describe_prompt.txt"
+
+
+def is_prompt_injection(text: str) -> bool:
+    risky_patterns = [
+        "ignore previous instructions",
+        "ignore all previous instructions",
+        "system prompt",
+        "developer message",
+        "reveal prompt",
+        "jailbreak",
+        "pretend you are",
+        "disregard instructions",
+        "<script",
+        "</script>"
+    ]
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in risky_patterns)
 
 
 @describe_bp.route("/describe", methods=["POST"])
@@ -33,6 +51,9 @@ def describe():
     if len(input_text) > 5000:
         return jsonify({"error": "input_text is too long"}), 400
 
+    if is_prompt_injection(input_text):
+        return jsonify({"error": "input_text contains blocked content"}), 400
+
     try:
         prompt_template = PROMPT_FILE.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -52,14 +73,10 @@ def describe():
         }), 200
 
     except Exception:
-        fallback_description = (
-            "AI description is temporarily unavailable. "
-            f"Audit input received: {input_text}"
-        )
         response_time_ms = round((perf_counter() - start_time) * 1000, 2)
 
         return jsonify({
-            "description": fallback_description,
+            "description": "AI description is temporarily unavailable.",
             "generated_at": datetime.now(timezone.utc).isoformat(),
             "response_time_ms": response_time_ms,
             "is_fallback": True

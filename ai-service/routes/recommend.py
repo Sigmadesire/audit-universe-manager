@@ -5,9 +5,27 @@ from time import perf_counter
 from services.groq_client import generate_text
 import json
 
+
 recommend_bp = Blueprint("recommend", __name__)
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "recommend_prompt.txt"
+
+
+def is_prompt_injection(text: str) -> bool:
+    risky_patterns = [
+        "ignore previous instructions",
+        "ignore all previous instructions",
+        "system prompt",
+        "developer message",
+        "reveal prompt",
+        "jailbreak",
+        "pretend you are",
+        "disregard instructions",
+        "<script",
+        "</script>"
+    ]
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in risky_patterns)
 
 
 @recommend_bp.route("/recommend", methods=["POST"])
@@ -34,6 +52,9 @@ def recommend():
     if len(input_text) > 5000:
         return jsonify({"error": "input_text is too long"}), 400
 
+    if is_prompt_injection(input_text):
+        return jsonify({"error": "input_text contains blocked content"}), 400
+
     try:
         prompt_template = PROMPT_FILE.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -56,6 +77,12 @@ def recommend():
 
             if not all(key in item for key in ("actiontype", "description", "priority")):
                 raise ValueError("Each recommendation must contain actiontype, description, and priority")
+
+            if not isinstance(item["actiontype"], str) or not item["actiontype"].strip():
+                raise ValueError("actiontype must be a non-empty string")
+
+            if not isinstance(item["description"], str) or not item["description"].strip():
+                raise ValueError("description must be a non-empty string")
 
             if item["priority"] not in valid_priorities:
                 raise ValueError("priority must be High, Medium, or Low")

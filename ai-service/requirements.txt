@@ -1,4 +1,4 @@
 Flask==3.0.3
-flask
 groq
 python-dotenv
+sentence-transformers==3.0.1

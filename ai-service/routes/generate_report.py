@@ -5,9 +5,35 @@ from time import perf_counter
 from services.groq_client import generate_text
 import json
 
+
 generate_report_bp = Blueprint("generate_report", __name__)
 
 PROMPT_FILE = Path(__file__).resolve().parent.parent / "prompts" / "generate_report_prompt.txt"
+
+
+def is_prompt_injection(text: str) -> bool:
+    risky_patterns = [
+        "ignore previous instructions",
+        "ignore all previous instructions",
+        "system prompt",
+        "developer message",
+        "reveal prompt",
+        "jailbreak",
+        "pretend you are",
+        "disregard instructions",
+        "<script",
+        "</script>"
+    ]
+    lowered = text.lower()
+    return any(pattern in lowered for pattern in risky_patterns)
+
+
+def is_non_empty_string_list(value) -> bool:
+    return (
+        isinstance(value, list) and
+        len(value) > 0 and
+        all(isinstance(item, str) and item.strip() for item in value)
+    )
 
 
 @generate_report_bp.route("/generate-report", methods=["POST"])
@@ -34,6 +60,9 @@ def generate_report():
     if len(input_text) > 5000:
         return jsonify({"error": "input_text is too long"}), 400
 
+    if is_prompt_injection(input_text):
+        return jsonify({"error": "input_text contains blocked content"}), 400
+
     try:
         prompt_template = PROMPT_FILE.read_text(encoding="utf-8")
     except FileNotFoundError:
@@ -58,11 +87,11 @@ def generate_report():
         if not isinstance(report["overview"], str) or not report["overview"].strip():
             raise ValueError("overview must be a non-empty string")
 
-        if not isinstance(report["key_items"], list) or len(report["key_items"]) == 0:
-            raise ValueError("key_items must be a non-empty list")
+        if not is_non_empty_string_list(report["key_items"]):
+            raise ValueError("key_items must be a non-empty list of strings")
 
-        if not isinstance(report["recommendations"], list) or len(report["recommendations"]) == 0:
-            raise ValueError("recommendations must be a non-empty list")
+        if not is_non_empty_string_list(report["recommendations"]):
+            raise ValueError("recommendations must be a non-empty list of strings")
 
         response_time_ms = round((perf_counter() - start_time) * 1000, 2)
 
